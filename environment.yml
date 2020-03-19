@@ -1,0 +1,12 @@
+name: aeds1-environment
+channels:
+  - conda-forge
+dependencies:
+  - python
+  - pip
+  - pip:
+    - nbgitpuller
+    - sphinx-gallery
+    - pandas
+    - matplotlib
+    - xeus-cling
