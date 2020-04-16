@@ -3,28 +3,70 @@
 #include "xplot/xaxes.hpp"
 #include <random>
 #include <vector>
+#include <array>
 #include <map>
 #include <algorithm> // std::min_element
 #include <iterator>  // std::begin, std::end
-//#include <iostream>
+#include <iostream>
 
 namespace aeds1
 {
-	xpl::figure fig;
-	xpl::linear_scale sx, sy;	
-	xpl::lines eixo_x(sx,sy), eixo_y(sx,sy);
+	#define MAXFIG 20 // define o numero maximo de figuras disponivel em um notebook
 	
+	// estrutura usada para armazenar um curva: pontos x,y e o objeto de desenho
 	typedef struct {
 		xpl::lines line;
 		std::vector<double> x;
 		std::vector<double> y;
 	} T_CURVA;
 	
-	std::map<int, T_CURVA> curvas;
-		
+	std::array<std::map<int, T_CURVA>, MAXFIG> curvas; // todas as curvas de todas as figuras
+
+	std::array<xpl::figure, MAXFIG> figuras; // cria um vetor com MAXFIG figuras
+	std::array<xpl::lines, MAXFIG> eixos_x, eixos_y; // os eixos x e y de cada figura
+	std::array<xpl::scatter, MAXFIG> extremos_x, extremos_y;
+	
+	std::array<xpl::linear_scale, MAXFIG> sx, sy;
+	
+	void inicializa() {
+		for (int i = 0; i < MAXFIG; i++) {
+			// criando os eixos x, y e configurando-os
+			eixos_x[i] = xpl::lines(sx[i],sy[i]);
+			eixos_y[i] = xpl::lines(sx[i],sy[i]);
+
+			extremos_x[i] = xpl::scatter::initialize(aeds1::sx[i], aeds1::sy[i]) .finalize();
+			extremos_y[i] = xpl::scatter::initialize(aeds1::sx[i], aeds1::sy[i]) .finalize();
+			
+			eixos_x[i].opacities = std::vector<double>({0.3});
+			eixos_x[i].colors = std::vector<std::string>({"red"});
+			eixos_x[i].line_style = std::string("dashed");
+
+			eixos_y[i].opacities = std::vector<double>({0.3});
+			eixos_y[i].colors = std::vector<std::string>({"red"});
+			eixos_y[i].line_style = std::string("dashed");
+
+			eixos_x[i].x = std::vector<double>({0,1});
+			eixos_x[i].y = std::vector<double>({0,0});
+			eixos_y[i].x = std::vector<double>({0,0});
+			eixos_y[i].y = std::vector<double>({0,1});
+
+			extremos_x[i].x = std::vector<double>({0,1});
+			extremos_x[i].y = std::vector<double>({0,0});
+			extremos_y[i].x = std::vector<double>({0,0});
+			extremos_y[i].y = std::vector<double>({0,1});
+			
+			// adicionando os eixos à figura
+			figuras[i].add_mark(eixos_x[i]);
+			figuras[i].add_mark(eixos_y[i]);
+			
+			figuras[i].add_mark(extremos_x[i]);
+			figuras[i].add_mark(extremos_y[i]);
+		}
+	}
+
+	// retorna a cor padrão a ser usada em cada curva, dentro de uma figura
 	std::vector<std::string> getColor(int idx) {
 		switch (idx) {
-			std::vector<std::string>({"red"});
 			case 0: return std::vector<std::string>({"blue"});
 			case 1: return std::vector<std::string>({"red"});
 			case 2: return std::vector<std::string>({"purple"});
@@ -33,86 +75,88 @@ namespace aeds1
 		}
 	}
 
-	void inicializa()
-	{
-		eixo_x.opacities = std::vector<double>({0.3});
-		eixo_x.colors = std::vector<std::string>({"red"});
-		eixo_x.line_style = std::string("dashed");
-
-		eixo_y.opacities = std::vector<double>({0.3});
-		eixo_y.colors = std::vector<std::string>({"red"});
-		eixo_y.line_style = std::string("dashed");
-
-		eixo_x.x = std::vector<double>({0,1});
-		eixo_x.y = std::vector<double>({0,0});
-		eixo_y.x = std::vector<double>({0,0});
-		eixo_y.y = std::vector<double>({0,1});
-		
-		fig.add_mark(eixo_x);
-		fig.add_mark(eixo_y);
-	}
-
-	void atualizaEixos() {
+	// atualiza os eixos x e y para o intervalo de dados
+	void atualizaEixos(int figura = 0) {
 		double xmin, xmax, ymin, ymax;
-		xmin = xmax = ymin = ymax = 0.0;
-		for (auto const& p : aeds1::curvas) {
+		bool primeiro_x = true, primeiro_y = true;
+		for (auto const& p : aeds1::curvas[figura]) {
 			for ( auto const& valor : p.second.x) {
+				if (primeiro_x) {
+					primeiro_x = false;
+					xmin = xmax = valor;
+				}
 				if (valor < xmin)
 					xmin = valor;
 				if (valor > xmax)
 					xmax = valor;
 			}
 			for ( auto const& valor : p.second.y) {
+				if (primeiro_y) {
+					primeiro_y = false;
+					ymin = ymax = valor;
+				}
 				if (valor < ymin)
 					ymin = valor;
 				if (valor > ymax)
 					ymax = valor;
 			}
 		}
-		eixo_x.x = std::vector<double>({xmin,xmax});
-		eixo_y.y = std::vector<double>({ymin,ymax});
+		eixos_x[figura].x = std::vector<double>({xmin,xmax});
+		//eixos_x[figura].y = std::vector<double>({ymin,ymin});
+		//eixos_y[figura].x = std::vector<double>({xmin,xmin});
+		eixos_y[figura].y = std::vector<double>({ymin,ymax});
+		
+		extremos_x[figura].x = std::vector<double>({xmin,xmax});
+		extremos_x[figura].names = std::vector<std::string>{std::to_string(xmin), std::to_string(xmax)};
+
+		extremos_y[figura].y = std::vector<double>({ymin,ymax});
+		extremos_y[figura].names = std::vector<std::string>{std::to_string(ymin), std::to_string(ymax)};
 		//std::cout << xmin << " " << xmax << " " << ymin << " " << ymax << std::endl;
 	}
 
-	void plot_apaga(int _curva = 0)
+	// apaga uma curva de uma figura
+	void plot_apaga(int _curva = 0, int figura = 0)
 	{
-		if ( curvas.count( _curva ) ) {
-			curvas[ _curva ].x.clear();
-			curvas[ _curva ].y.clear();
-			curvas[ _curva ].line.x = curvas[ _curva ].x;
-			curvas[ _curva ].line.y = curvas[ _curva ].y;
+		if ( curvas[figura].count( _curva ) ) { // verifica se a curva existe
+			curvas[figura][ _curva ].x.clear();
+			curvas[figura][ _curva ].y.clear();
+			curvas[figura][ _curva ].line.x = curvas[figura][ _curva ].x;
+			curvas[figura][ _curva ].line.y = curvas[figura][ _curva ].y;
+			atualizaEixos(figura);
 		}
-		atualizaEixos();
+		
 	}
 
-	void plot_novo_ponto(double newx, double newy, int _curva=0) {
-		if (curvas.count( _curva )) {
-			curvas[_curva].x.push_back( newx);
-			curvas[_curva].y.push_back( newy);
-			curvas[_curva].line.x = curvas[_curva].x;
-			curvas[_curva].line.y = curvas[_curva].y;
+	// adiciona um ponto novo em uma curva de uma figura
+	void plot_novo_ponto(double newx, double newy, int _curva=0, int figura = 0) {
+		if (curvas[figura].count( _curva )) {
+			curvas[figura][_curva].x.push_back( newx);
+			curvas[figura][_curva].y.push_back( newy);
+			curvas[figura][_curva].line.x = curvas[figura][_curva].x;
+			curvas[figura][_curva].line.y = curvas[figura][_curva].y;
 		} else { // cria uma nova curva
 			T_CURVA tmp;
-			tmp.line = xpl::lines(sx,sy);
+			tmp.line = xpl::lines(sx[figura],sy[figura]);
 			tmp.line.colors = getColor(_curva);
-			curvas.insert({_curva, tmp});
-			fig.add_mark(curvas[_curva].line);
+			curvas[figura].insert({_curva, tmp});
+			figuras[figura].add_mark(curvas[figura][_curva].line);
 		}
-		atualizaEixos();
+		atualizaEixos(figura);
 	}
 	
-	
-	void plot_apaga_ponto(int _curva=0)
+	// apaga um ponto de uma curva de uma figura
+	void plot_apaga_ponto(int _curva=0, int figura = 0)
 	{
-		if ( curvas.count( _curva ) ) {
-			curvas[_curva].x.pop_back();
-			curvas[_curva].y.pop_back();
-			curvas[_curva].line.x = curvas[_curva].x;
-			curvas[_curva].line.y = curvas[_curva].y;
-			atualizaEixos();
+		if ( curvas[figura].count( _curva ) ) {
+			curvas[figura][_curva].x.pop_back();
+			curvas[figura][_curva].y.pop_back();
+			curvas[figura][_curva].line.x = curvas[figura][_curva].x;
+			curvas[figura][_curva].line.y = curvas[figura][_curva].y;
+			atualizaEixos(figura);
 		}
 	}
-			
+	
+	// exemplo
 	void plot_exemplo()
 	{		
 		plot_novo_ponto(0,0);
@@ -124,6 +168,7 @@ namespace aeds1
 	}
 }
 
+// inicializacao, chamada quando executamos .X aeds1_plot no jupyter
 void aeds1_plot()
 {
 	aeds1::inicializa();
